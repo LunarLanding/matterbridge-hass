@@ -14,6 +14,35 @@ If you like this project and find it useful, please consider giving it a **star*
 
 > For naming issues (especially upsetting with Alexa), read the explanation and the solution [here](https://github.com/Luligu/matterbridge-hass/discussions/86).
 
+## [1.0.10] - 2026-03-09
+
+### Breaking Changes
+
+- [split]: The names of split entities may now be chosen using this logic:
+  - `Friendly name` => `Name` => `Original name` (i.e. Computer Plug Child Lock). This avoids most duplicate-name issues, but the name will probably be truncated to 32 characters.
+  - `Name` => `Original name` => `Friendly name` (i.e. Child Lock). This will probably create duplicate-name issues unless you change the name.
+
+  If you change this option, check the whiteList and blackList if you use them.
+
+### Added
+
+- [report]: A new file `report.log` is generated in the `Matterbridge/matterbridge-hass` directory. It contains the list of devices and entities, highlighting whether they are in filterByArea, have filterByLabel, or are in splitEntities.
+- [config]: Add the `splitNameStrategy` config option to select the naming strategy for split entities: `Entity name` (i.e. Child Lock) or `Friendly name` (i.e. Computer Plug Child Lock).
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.2.
+- [package]: Bump `eslint` to v.10.0.3.
+
+### Fixed
+
+- [mireds]: Fix the maximum mireds value. Thanks jvmahon (https://github.com/Luligu/matterbridge/issues/523).
+- [split]: Fix the name priority for split entities.
+- [filter]: Ignore area for device entities and split entities.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
 ## [1.0.9] - 2026-03-06
 
 ### Breaking Changes
