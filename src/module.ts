@@ -975,6 +975,36 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     this.log.info(`Shut down platform ${idn}${this.config.name}${rs}${nf} completed`);
   }
 
+  private getLightTransition(
+    command: string,
+    entityId: string,
+    state: HassState | undefined,
+    serviceAttributes: Record<string, HomeAssistantPrimitive> | undefined,
+    request: Record<string, any> | undefined,
+    log: AnsiLogger,
+  ): number | undefined {
+    if (!isValidNumber(request?.transitionTime, 1)) return undefined;
+    const transition = Math.round(request.transitionTime / 10);
+
+    if (command !== 'moveToColorTemperature' || !serviceAttributes || !isValidNumber(serviceAttributes['color_temp_kelvin'], 1)) return transition;
+
+    const colorMode = state?.attributes?.['color_mode'];
+    const currentColorTempKelvin = state?.attributes?.['color_temp_kelvin'];
+    const targetColorTempKelvin = serviceAttributes['color_temp_kelvin'] as number;
+    const isLongAdaptiveTransition = transition >= 600;
+    const switchingFromColorMode = isValidString(colorMode, 1) && colorMode !== 'color_temp';
+    const farFromAdaptiveTarget = isValidNumber(currentColorTempKelvin, 1) && Math.abs(currentColorTempKelvin - targetColorTempKelvin) >= 500;
+
+    if (isLongAdaptiveTransition && (switchingFromColorMode || farFromAdaptiveTarget)) {
+      log.debug(
+        `Command ${ign}${command}${rs}${db} for domain ${CYAN}light${db} entity ${CYAN}${entityId}${db} is switching into adaptive white from a manual or far-off state => skipping the long transition`,
+      );
+      return undefined;
+    }
+
+    return transition;
+  }
+
   /**
    * Handle incoming commands from Matterbridge.
    *
@@ -1112,8 +1142,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             if (isValidArray(xy_color, 2)) serviceAttributes['xy_color'] = xy_color;
           }
 
-          // Transition time is not present in on off toggle commands. In Matter is represented in 1/10th of a second while in Home Assistant it's represented in seconds, so we need to convert it before calling the service.
-          if (isValidNumber(data.request?.transitionTime, 1)) serviceAttributes['transition'] = Math.round(data.request.transitionTime / 10);
+          const transition = this.getLightTransition(command, entityId, state, serviceAttributes, data.request, data.endpoint.log);
+          if (transition !== undefined) serviceAttributes['transition'] = transition;
 
           // Call the light.turn_on service with the attributes we found on the Matter clusters.
           this.log.debug(
@@ -1126,8 +1156,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         }
       }
       // Normal execution for all the other commands and domains, we use the converter if present to get the service attributes and then call the service.
-      const serviceAttributes: Record<string, HomeAssistantPrimitive> = hassCommand.converter ? hassCommand.converter(data.request, data.attributes, state) : undefined;
-      if (isValidNumber(data.request?.transitionTime, 1)) serviceAttributes['transition'] = Math.round(data.request.transitionTime / 10);
+      let serviceAttributes: Record<string, HomeAssistantPrimitive> | undefined = hassCommand.converter ? hassCommand.converter(data.request, data.attributes, state) : undefined;
+      const transition =
+        domain === 'light'
+          ? this.getLightTransition(command, entityId, state, serviceAttributes, data.request, data.endpoint.log)
+          : isValidNumber(data.request?.transitionTime, 1)
+            ? Math.round(data.request.transitionTime / 10)
+            : undefined;
+      if (transition !== undefined) {
+        if (serviceAttributes === undefined) serviceAttributes = {};
+        serviceAttributes['transition'] = transition;
+      }
       await this.ha.callService(hassCommand.domain, hassCommand.service, entityId, serviceAttributes);
     } else {
       data.endpoint.log.warn(`Command ${ign}${command}${rs}${wr} not supported for domain ${CYAN}${domain}${wr} entity ${CYAN}${entityId}${wr}`);

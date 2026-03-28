@@ -3229,6 +3229,74 @@ describe('Matterbridge ' + NAME, () => {
     await cleanup();
   });
 
+  it('should catch up immediately when adaptive lighting switches a light back to white and keep the slow transition near target', async () => {
+    haPlatform = new HomeAssistantPlatform(mockMatterbridge, log, mockConfig);
+    const entityId = 'light.adaptive_catchup';
+    const endpoint = {
+      maybeNumber: 1,
+      log,
+      getAttribute: jest.fn(() => true),
+    } as unknown as MatterbridgeEndpoint;
+
+    const manualColorState = {
+      entity_id: 'light.adaptive_catchup',
+      state: 'on',
+      attributes: {
+        supported_color_modes: [ColorMode.COLOR_TEMP, ColorMode.XY, ColorMode.HS],
+        color_mode: ColorMode.HS,
+        brightness: 100,
+        color_temp_kelvin: 5000,
+        min_color_temp_kelvin: 2500,
+        max_color_temp_kelvin: 6500,
+        hs_color: [120, 100],
+        friendly_name: 'Adaptive Catchup Light',
+      },
+    } as unknown as HassState;
+
+    haPlatform.ha.hassStates.set(entityId, manualColorState);
+    await haPlatform.commandHandler(
+      {
+        request: getMoveToColorTemperatureRequest(250, 18530, true),
+        cluster: 'ColorControl',
+        attributes: {},
+        endpoint,
+      },
+      entityId,
+      'moveToColorTemperature',
+    );
+    expect(callServiceSpy).toHaveBeenCalledWith(entityId.split('.')[0], 'turn_on', entityId, { color_temp_kelvin: 4000 });
+    expect(loggerDebugSpy).toHaveBeenCalledWith(expect.stringContaining('skipping the long transition'));
+
+    jest.clearAllMocks();
+    const nearTargetState = {
+      ...manualColorState,
+      attributes: {
+        ...manualColorState.attributes,
+        color_mode: ColorMode.COLOR_TEMP,
+        color_temp_kelvin: 3900,
+      },
+    } as unknown as HassState;
+
+    haPlatform.ha.hassStates.set(entityId, nearTargetState);
+    await haPlatform.commandHandler(
+      {
+        request: getMoveToColorTemperatureRequest(250, 18530, true),
+        cluster: 'ColorControl',
+        attributes: {},
+        endpoint,
+      },
+      entityId,
+      'moveToColorTemperature',
+    );
+    expect(callServiceSpy).toHaveBeenCalledWith(entityId.split('.')[0], 'turn_on', entityId, {
+      color_temp_kelvin: 4000,
+      transition: 1853,
+    });
+    expect(loggerDebugSpy).not.toHaveBeenCalledWith(expect.stringContaining('skipping the long transition'));
+
+    await haPlatform.onShutdown('Test reason');
+  });
+
   it('should call onStart and warn for a longer then 32 characters individual entity', async () => {
     const sensorEntity = {
       area_id: null,
