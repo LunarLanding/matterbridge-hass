@@ -3,7 +3,7 @@
  * @file src\module.ts
  * @author Luca Liguori
  * @created 2024-09-13
- * @version 1.7.0
+ * @version 1.7.1
  * @license Apache-2.0
  * @copyright 2024, 2025, 2026 Luca Liguori.
  *
@@ -49,6 +49,7 @@ import {
 } from './converters.js';
 import { addEventEntity } from './event.entity.js';
 import { addHelperEntity } from './helper.entity.js';
+import { getEntityName, isSplitEntity } from './helpers.js';
 // Plugin imports
 import { HassArea, HassConfig as HassConfig, HassDevice, HassEntity, HassLabel, HassServices, HassState, HomeAssistant, HomeAssistantPrimitive } from './homeAssistant.js';
 import { MutableDevice } from './mutableDevice.js';
@@ -70,7 +71,9 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   entityBlackList: string[];
   deviceEntityBlackList: Record<string, string[]>;
   splitEntities: string[];
+  splitByLabel: string;
   splitNameStrategy: 'Entity name' | 'Friendly name';
+  controllerStrategy: 'Merge' | 'Matter';
   namePostfix: string;
   postfix: string;
   airQualityRegex: string;
@@ -188,10 +191,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.config.entityBlackList = isValidArray(this.config.entityBlackList, 1) ? this.config.entityBlackList : [];
       this.config.deviceEntityBlackList = isValidObject(this.config.deviceEntityBlackList, 1) ? this.config.deviceEntityBlackList : {};
       this.config.splitEntities = this.config.splitEntities === undefined ? [] : this.config.splitEntities;
+      this.config.splitByLabel = isValidString(this.config.splitByLabel) ? this.config.splitByLabel : '';
       this.config.splitNameStrategy =
         isValidString(this.config.splitNameStrategy, 10) && ['Entity name', 'Friendly name'].includes(this.config.splitNameStrategy)
           ? this.config.splitNameStrategy
           : 'Entity name';
+      this.config.controllerStrategy =
+        isValidString(this.config.controllerStrategy, 5) && ['Merge', 'Matter'].includes(this.config.controllerStrategy) ? this.config.controllerStrategy : 'Merge';
       this.config.namePostfix = isValidString(this.config.namePostfix, 1, 3) ? this.config.namePostfix : '';
       this.config.postfix = isValidString(this.config.postfix, 1, 3) ? this.config.postfix : '';
       this.config.airQualityRegex = isValidString(this.config.airQualityRegex, 1) ? this.config.airQualityRegex : '';
@@ -356,7 +362,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             `${(state?.attributes?.friendly_name ?? entity.name ?? entity.original_name ?? '').length > 32 ? ' LONGNAME' : ''}` +
             `${areaId && entity.area_id === areaId ? ' AREA' : ''}` + // Devices entities cannot be in a different area than their device.
             `${labelId && entity.labels?.includes(labelId) ? ' LABEL' : ''}` +
-            `${this.config.splitEntities?.includes(entity.entity_id) ? ' SPLIT' : ''}\n`,
+            `${isSplitEntity(entity, this.config.splitEntities, Array.from(this.ha.hassLabels.values()), this.config.splitByLabel) ? ' SPLIT' : ''}\n`,
         );
       }
     }
@@ -387,6 +393,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // *********************************************************************************************************
     // ************************************* Scan the individual entities **************************************
     // *********************************************************************************************************
+
     for (const entity of Array.from(this.ha.hassEntities.values()).filter((e) => e.device_id === null && e.disabled_by === null)) {
       const [domain, name] = entity.entity_id.split('.');
       // Skip not supported domains.
@@ -412,10 +419,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         continue;
       }
       // If the entity doesn't have a valid name, we skip it.
-      const entityName =
-        this.config.splitNameStrategy === 'Friendly name'
-          ? (hassState.attributes?.friendly_name ?? entity.name ?? entity.original_name)
-          : (entity.name ?? entity.original_name ?? hassState.attributes?.friendly_name);
+      const entityName = getEntityName(entity, hassState, this.config.splitNameStrategy);
       if (!isValidString(entityName, 1)) {
         this.log.debug(`Individual entity ${CYAN}${entity.entity_id}${db} has no valid name. Skipping...`);
         continue;
@@ -491,7 +495,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // Register the device if we have found a supported domain
       if (mutableDevice.get().deviceTypes.length > 1 || mutableDevice.size() > 1) {
         try {
-          mutableDevice.create(true); // Use remap for individual entities
+          mutableDevice.create(this.config.controllerStrategy === 'Merge');
           mutableDevice.logMutableDevice();
           this.log.debug(`Registering device ${dn}${entityName}${db}...`);
           await this.registerDevice(mutableDevice.getEndpoint());
@@ -522,6 +526,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // *********************************************************************************************************
     // ******************************************* Scan the devices ********************************************
     // *********************************************************************************************************
+
     for (const device of Array.from(this.ha.hassDevices.values()).filter((d) => d.disabled_by === null)) {
       // Check if we have a valid device
       const deviceName = device.name_by_user ?? device.name;
@@ -608,8 +613,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // *******************************************************************************************************************
       // Scan entities that belong to this device for supported domains and services and add them to the Matterbridge device
       // *******************************************************************************************************************
+
+      let hasRvc = false;
       for (const entity of Array.from(this.ha.hassEntities.values()).filter((e) => e.device_id === device.id && e.disabled_by === null)) {
-        this.log.debug(`Lookup device ${CYAN}${device.name}${db} entity ${CYAN}${entity.entity_id}${db}`);
+        this.log.debug(`Lookup device ${CYAN}${device.name}${db} entity ${CYAN}${entity.entity_id}${db} labels ${CYAN}${entity.labels?.join(', ') ?? ''}${db}...`);
         const [domain, _name] = entity.entity_id.split('.');
         const entityName = entity.name ?? entity.original_name ?? deviceName;
         let endpointName = entity.entity_id;
@@ -646,7 +653,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         // Set the entity selects and validate the entity.
         this.setSelectDeviceEntity(device.id, entity.entity_id, entityName, 'component');
         this.setSelectEntity(entityName, entity.entity_id, 'component');
-        if ((this.config.splitEntities as string[]).includes(entity.entity_id)) {
+        if (isSplitEntity(entity, this.config.splitEntities, Array.from(this.ha.hassLabels.values()), this.config.splitByLabel)) {
           this.log.debug(`Lookup device ${CYAN}${device.name}${db} entity ${CYAN}${entity.entity_id}${db} name ${CYAN}${entityName}${db} is a splitEntity. Skipping...`);
           continue; // Skip split entities from the main device
         }
@@ -654,15 +661,19 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           this.unselectedEntities++;
           continue;
         }
+        // Set the entity mode for the Rvc.
+        if (domain === 'vacuum' && this.config.enableServerRvc) {
+          hasRvc = true;
+          mutableDevice.setMode('server');
+          // istanbul ignore else
+          if (!battery) mutableDevice.addDeviceTypes('', powerSource); // Temporary fix for vacuum without battery and enableServerRvc
+        }
         // Lookup and add helpers domain entity.
         const eHelper = addHelperEntity(mutableDevice, entity.entity_id, entity, hassState, this);
         if (eHelper !== undefined) {
           endpointName = eHelper;
           this.endpointNames.set(entity.entity_id, endpointName); // Set the endpoint name for the entity
         }
-        // Set the entity mode for the Rvc.
-        if (domain === 'vacuum' && this.config.enableServerRvc) mutableDevice.setMode('server');
-        if (domain === 'vacuum' && this.config.enableServerRvc && !battery) mutableDevice.addDeviceTypes('', powerSource); // Temporary fix for vacuum without battery and enableServerRvc
         // Lookup and add core domains entity.
         const eControl = addControlEntity(mutableDevice, entity, hassState, this.commandHandler.bind(this), this.subscribeHandler.bind(this), this.log);
         if (eControl !== undefined) {
@@ -705,8 +716,17 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       // Register the device if we have found supported domains and entities
       if (mutableDevice.size() > 1) {
         try {
+          if (this.config.enableServerRvc && hasRvc) {
+            this.log.debug(`Checking server RVC for device ${dn}${device.name}${db} with enabled server RVC...`);
+            for (const entity of Array.from(this.ha.hassEntities.values()).filter((e) => e.device_id === device.id)) {
+              const domain = entity.entity_id.split('.')[0];
+              if (domain !== 'vacuum' && mutableDevice.has(entity.entity_id)) {
+                this.log.warn(`Device ${dn}${device.name}${wr} has more entities with enabled server RVC. Please filter out or unselect all other entities.`);
+              }
+            }
+          }
           this.log.debug(`Registering device ${dn}${device.name}${db}...`);
-          mutableDevice.create(true); // Use remap for device entities
+          mutableDevice.create(this.config.controllerStrategy === 'Merge');
           mutableDevice.logMutableDevice();
           await this.registerDevice(mutableDevice.getEndpoint());
           // istanbul ignore next cause is not testable
@@ -745,8 +765,12 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     // *********************************************************************************************************
     // ************************************ Scan the split entities  *******************************************
     // *********************************************************************************************************
+
     for (const entity of Array.from(this.ha.hassEntities.values()).filter(
-      (e) => e.device_id !== null && e.disabled_by === null && (this.config.splitEntities as string[]).includes(e.entity_id),
+      (entity) =>
+        entity.device_id !== null &&
+        entity.disabled_by === null &&
+        isSplitEntity(entity, this.config.splitEntities, Array.from(this.ha.hassLabels.values()), this.config.splitByLabel),
     )) {
       const [domain, name] = entity.entity_id.split('.');
       // Skip not supported domains.
@@ -772,10 +796,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
         continue;
       }
       // If the entity doesn't have a valid name, we skip it.
-      const entityName =
-        this.config.splitNameStrategy === 'Friendly name'
-          ? (hassState.attributes?.friendly_name ?? entity.name ?? entity.original_name)
-          : (entity.name ?? entity.original_name ?? hassState.attributes?.friendly_name);
+      const entityName = getEntityName(entity, hassState, this.config.splitNameStrategy);
       if (!isValidString(entityName, 1)) {
         this.log.debug(`Split entity ${CYAN}${entity.entity_id}${db} has no valid name. Skipping...`);
         continue;
@@ -856,11 +877,15 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       if (mutableDevice.get().deviceTypes.includes(powerSource)) {
         mutableDevice.addClusterServerBatteryPowerSource('', PowerSource.BatChargeLevel.Ok, 200);
       }
+      mutableDevice.setComposedType('Hass Split');
+      mutableDevice.setConfigUrl(
+        `${(this.config.host as string | undefined)?.replace('ws://', 'http://').replace('wss://', 'https://')}/config/devices/device/${entity.device_id}`,
+      );
 
       // Register the device if we have found a supported domain
       if (mutableDevice.get().deviceTypes.length > 1 || mutableDevice.size() > 1) {
         try {
-          mutableDevice.create(true); // Use remap for split entities
+          mutableDevice.create(this.config.controllerStrategy === 'Merge');
           mutableDevice.logMutableDevice();
           this.log.debug(`Registering device ${dn}${entityName}${db}...`);
           await this.registerDevice(mutableDevice.getEndpoint());
@@ -1034,12 +1059,13 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
           return; // Skip the command if the light is off. Matter will store the values in the clusters and we apply them when the light is turned on
         }
 
+        // Turn off the light if level <= minLevel. Not managed by the hassCommandConverter since it's a special case for lights that we can manage better here to avoid calling the turn_on service.
         if (command === 'moveToLevelWithOnOff' && data.request['level'] <= (data.endpoint.getAttribute(LevelControl.Cluster.id, 'minLevel') ?? 1)) {
           data.endpoint.log.debug(
             `Command ${ign}${command}${rs}${db} for domain ${CYAN}${domain}${db} entity ${CYAN}${entityId}${db} received with level = minLevel => turn off the light`,
           );
           await this.ha.callService('light', 'turn_off', entityId);
-          return; // Turn off the light if level <= minLevel. Not managed by the hassCommandConverter since it's a special case for lights that we can manage better here to avoid calling the turn_on service
+          return;
         }
 
         if (
@@ -1393,7 +1419,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (isValidString(this.config.filterByLabel, 1)) {
       if (labels.length === 0) return false; // If the labels array is empty, the device / entity has no labels, so we skip it.
       labelMatch = false;
-      const label = Array.from(this.ha.hassLabels.values()).find((l) => l.name === this.config.filterByLabel);
+      const label = Array.from(this.ha.hassLabels.values()).find((label) => label.name === this.config.filterByLabel);
       if (!label) return false; // If the label configured in the config is not found, we skip it.
       if (labels.includes(label.label_id)) labelMatch = true;
     }

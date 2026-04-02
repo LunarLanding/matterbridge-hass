@@ -5,14 +5,14 @@
   "required": ["host", "token"],
   "properties": {
     "name": {
-      "title": "Name",
+      "title": "Plugin Name",
       "description": "Plugin name",
       "type": "string",
       "readOnly": true,
       "ui:widget": "hidden"
     },
     "type": {
-      "title": "Type",
+      "title": "Plugin Type",
       "description": "Plugin type",
       "type": "string",
       "readOnly": true,
@@ -121,12 +121,25 @@
       "uniqueItems": true,
       "selectEntityFrom": "description"
     },
+    "splitByLabel": {
+      "title": "Split By Label",
+      "description": "Split device entities by label (use label name). Split entities must satisfy the filters (if any) and the whiteList (if any).",
+      "type": "string",
+      "default": ""
+    },
     "splitNameStrategy": {
       "title": "Split Name Strategy",
       "description": "Strategy used for split entity names. Entity name: use the entity name (i.e. Child Lock) if it exists, otherwise use the friendly name. Friendly name: use the friendly name (i.e. Computer Plug Child Lock) if it exists, otherwise use the entity name. You will lose the configuration of the devices in your controller when changing this value and you may need to pair again the controller.",
       "type": "string",
       "enum": ["Entity name", "Friendly name"],
       "default": "Entity name"
+    },
+    "controllerStrategy": {
+      "title": "Strategy used to expose multiple device types. 'Merge' combines non-overlapping device types on the main endpoint. 'Matter' creates a separate endpoint for each device type. Use the Merge strategy for legacy controllers. Changing this setting may require you to pair the controller again.",
+      "description": "Strategy used for controller.",
+      "type": "string",
+      "enum": ["Merge", "Matter"],
+      "default": "Merge"
     },
     "namePostfix": {
       "title": "Name Postfix",
@@ -147,12 +160,12 @@
     },
     "enableServerRvc": {
       "title": "Enable Server Rvc",
-      "description": "Enable the Robot Vacuum Cleaner in server mode (Apple Home will crash unless you use this mode!). Also blacklist any other entities related to the vacuum cleaner device to avoid Apple Home crashes.",
+      "description": "Enable the Robot Vacuum Cleaner in server mode (Apple Home will crash unless you use this mode!). Also filter out or blacklist any other entities related to the vacuum cleaner device to avoid Apple Home crashes.",
       "type": "boolean",
       "default": true
     },
     "debug": {
-      "title": "Debug",
+      "title": "Enable Debug",
       "description": "Enable the debug for the plugin (development only)",
       "type": "boolean",
       "default": false

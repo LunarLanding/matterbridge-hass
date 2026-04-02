@@ -34,7 +34,7 @@ Features:
 - It is possible to select from a list the individual entities to include in the white or black list. Select by name, id or entity_id.
 - It is possible to select from a list the devices to include in the white or black list. Select by name or id.
 - It is possible to select from a list the entities to include in the device entity black list.
-- It is possible to pickup from a list the split entities.
+- It is possible to pickup from a list the split entities or to select them adding a label.
 - It is possible to postfix the Matter device serialNumber and the Matter device name to avoid collision with other instances.
 - Support **Apple Home Adaptive Lighting**. See https://github.com/Luligu/matterbridge/discussions/390.
 - Support **transition time**.
@@ -249,9 +249,25 @@ If you don't need the device temperature, just add it to deviceEntityBlackList.
 
 If you want a more technical explanation for the naming issues (expecially upsetting with Alexa) read the explanation [here](https://github.com/Luligu/matterbridge-hass/discussions/86).
 
-> **Adding an entity to splitEntities doesn't automatically add it to the whiteList so it has to be added manually if you use whiteList.**
+> **Adding an entity to splitEntities doesn't automatically add it to the whiteList, so it must be added manually if you use the whiteList.**
 
-> **If you enable the filters (area and label) also the split entity must sattisfy the filter criteria**
+> **If you enable the filters (area and label), the split entity must also satisfy the filter criteria.**
+
+### splitByLabel
+
+Any device entity with this label will be split. This is faster to setup then splitEntities on huge setups.
+
+> **Adding splitByLabel to an entity doesn't automatically add it to the whiteList, so it must be added manually if you use the whiteList.**
+
+> **If you enable the filters (area and label), the split entity must also satisfy the filter criteria.**
+
+### splitNameStrategy
+
+Strategy used for split entity names. "Entity name": use the entity name (i.e. Child Lock) if it exists; otherwise, use the friendly name. "Friendly name": use the friendly name (i.e. Computer Plug Child Lock) if it exists; otherwise, use the entity name. Changing this value will cause you to lose the device configuration in your controller, and you may need to pair the controller again.
+
+### controllerStrategy
+
+Strategy used to expose multiple device types. 'Merge' combines non-overlapping device types on the main endpoint. 'Matter' creates a separate endpoint for each device type. Use the Merge strategy for legacy controllers (more then one application device type on the same bridged endpoint is not compliant in Matter 1.5.0). Changing this setting may require you to pair the controller again cause the entire node is composed differently.
 
 ### airQualityRegex
 

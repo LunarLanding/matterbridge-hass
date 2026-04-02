@@ -14,6 +14,29 @@ If you like this project and find it useful, please consider giving it a **star*
 
 > For naming issues (especially upsetting with Alexa), read the explanation and the solution [here](https://github.com/Luligu/matterbridge-hass/discussions/86).
 
+## [1.0.12] - 2026-04-02
+
+### Breaking Changes
+
+- [button]: The domain `button` (added in 1.0.11) can cause the lights to not be anymore on the root endpoint. You can filter out or unselect the button entity (or split it) in that case (for Alexa). Thanks Rogibaer (https://github.com/Luligu/matterbridge-hass/issues/205);
+
+### Added
+
+- [rvc]: Add warning when enableServerRvc is true and the rvc has more entities. With Apple Home the rvc must be the unique device type: filter out, unselect or split all other entities that belong to the rvc device. Thanks hoppel118.
+- [splitByLabel]: Split device entities by label (use label name). All device entities with this label will be split. See the [readme](./README.md#splitbylabel) for more informations.
+- [split]: Split device entities have the link to the main device and composed type "Hass Split".
+- [controllerStrategy]: Add `controllerStrategy` config option. 'Merge' will merge each not overlapping device types on the main endpoint. 'Matter' will create a separate endpoint for each device type. Use Merge strategy for legacy controller. Change this setting may require to pair again the controller. See the [readme](./README.md#controllerstrategy) for more informations.
+
+### Changed
+
+- [package]: Update dependencies.
+- [package]: Bump package to `automator` v.3.1.4.
+- [package]: Bump `typescript` to v.6.0.2.
+- [package]: Bump `typescript-eslint` to v.8.58.0.
+- [package]: Add `CODE_OF_CONDUCT.md`.
+
+<a href="https://www.buymeacoffee.com/luligugithub"><img src="https://matterbridge.io/assets/bmc-button.svg" alt="Buy me a coffee" width="80"></a>
+
 ## [1.0.11] - 2026-03-21
 
 ### Added

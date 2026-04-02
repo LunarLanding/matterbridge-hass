@@ -23,12 +23,14 @@ import { HassArea, HassConfig, HassDevice, HassEntity, HassLabel, HassServices, 
 
 // Setup the test environment
 await setupTest(NAME, false);
+process.argv = ['node', 'homeAssistant.test.js'];
 
 describe('HomeAssistant', () => {
   let server: WebSocketServer;
   let client: WebSocket;
   let homeAssistant: HomeAssistant;
-  const wsUrl = 'ws://localhost:8123';
+  const port = 8678;
+  const wsUrl = `ws://localhost:${port}`;
   const apiPath = '/api/websocket';
   const accessToken = 'testAccessToken';
   const reconnectTimeoutTime = 120;
@@ -43,7 +45,7 @@ describe('HomeAssistant', () => {
   const config_response: HassConfig = { state: 'RUNNING' } as HassConfig;
 
   beforeAll(async () => {
-    server = new WebSocketServer({ port: 8123, path: apiPath });
+    server = new WebSocketServer({ port, path: apiPath });
 
     server.on('connection', (ws, req) => {
       const ip = req.socket.remoteAddress;
@@ -166,6 +168,10 @@ describe('HomeAssistant', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   afterAll(async () => {
@@ -712,21 +718,21 @@ describe('HomeAssistant', () => {
   });
 
   it('should not connect if wsUrl is not ws:// or wss://', async () => {
-    process.argv = [...originalProcessArgv, '--debug'];
-    homeAssistant = new HomeAssistant('http://localhost:8123', accessToken, reconnectTimeoutTime, reconnectRetries);
+    process.argv = ['node', 'homeAssistant.test.js', '--debug'];
+    homeAssistant = new HomeAssistant(`http://localhost:${port}`, accessToken, reconnectTimeoutTime, reconnectRetries);
     // @ts-expect-error accessing private property for test
     expect(homeAssistant.debug).toBe(true);
     // @ts-expect-error accessing private property for test
     expect(homeAssistant.verbose).toBe(false);
-    await expect(homeAssistant.connect()).rejects.toThrow('Invalid WebSocket URL: http://localhost:8123. It must start with ws:// or wss://');
+    await expect(homeAssistant.connect()).rejects.toThrow(`Invalid WebSocket URL: http://localhost:${port}. It must start with ws:// or wss://`);
     expect(homeAssistant.connected).toBe(false);
     await homeAssistant.close();
     homeAssistant.removeAllListeners(); // Remove all listeners to avoid memory leaks
   });
 
   it('should not connect if wsUrl is wss:// and certificate are not present', async () => {
-    process.argv = [...originalProcessArgv, '--verbose'];
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, reconnectTimeoutTime, reconnectRetries, './invalid/cert.pem');
+    process.argv = ['node', 'homeAssistant.test.js', '--verbose'];
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, reconnectTimeoutTime, reconnectRetries, './invalid/cert.pem');
     // @ts-expect-error accessing private property for test
     expect(homeAssistant.debug).toBe(true);
     // @ts-expect-error accessing private property for test
@@ -739,8 +745,8 @@ describe('HomeAssistant', () => {
   });
 
   it('should not connect if wsUrl is wss:// and certificate are not correct', async () => {
-    process.argv = [...originalProcessArgv];
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, reconnectTimeoutTime, reconnectRetries, path.join('certificates', 'matterbridge-hass-ca.crt'));
+    process.argv = ['node', 'homeAssistant.test.js'];
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, reconnectTimeoutTime, reconnectRetries, path.join('certificates', 'matterbridge-hass-ca.crt'));
 
     homeAssistant.on('error', () => {
       // Handle error event
@@ -763,8 +769,6 @@ describe('HomeAssistant', () => {
   it('should react to connection events with Home Assistant', async () => {
     homeAssistant = new HomeAssistant(wsUrl, accessToken, reconnectTimeoutTime, reconnectRetries);
 
-    jest.useFakeTimers();
-
     await new Promise<void>((resolve) => {
       homeAssistant.once('connected', () => {
         resolve();
@@ -780,6 +784,10 @@ describe('HomeAssistant', () => {
     expect((homeAssistant as any).reconnectTimeout).toBeUndefined();
     expect(server.clients.size).toBe(1);
     client = Array.from(server.clients)[0];
+
+    (homeAssistant as any).stopPing();
+    jest.useFakeTimers();
+    (homeAssistant as any).startPing();
 
     jest.clearAllMocks();
     (homeAssistant as any).startPing();
@@ -832,8 +840,6 @@ describe('HomeAssistant', () => {
     expect((homeAssistant as any).reconnectTimeoutTime).toBe(0);
     expect((homeAssistant as any).reconnectRetries).toBe(0);
 
-    jest.useFakeTimers();
-
     await new Promise((resolve) => {
       homeAssistant.once('connected', () => {
         resolve(undefined);
@@ -846,6 +852,10 @@ describe('HomeAssistant', () => {
     expect((homeAssistant as any).pingInterval).not.toBeUndefined();
     expect((homeAssistant as any).pingTimeout).toBeUndefined();
     expect((homeAssistant as any).reconnectTimeout).toBeUndefined();
+
+    (homeAssistant as any).stopPing();
+    jest.useFakeTimers();
+    (homeAssistant as any).startPing();
 
     jest.advanceTimersByTime((homeAssistant as any).pingIntervalTime);
 
@@ -877,7 +887,8 @@ describe('HomeAssistant with ssl', () => {
   const accessToken = 'testAccessToken';
   const reconnectTimeoutTime = 120;
   const reconnectRetries = 10;
-  const wsUrl = 'wss://localhost:8123';
+  const port = 8680;
+  const wsUrl = `wss://localhost:${port}`;
   const apiPath = '/api/websocket';
 
   beforeAll(async () => {
@@ -1070,8 +1081,8 @@ describe('HomeAssistant with ssl', () => {
     });
 
     await new Promise<void>((resolve) => {
-      httpsServer.listen(8123, () => {
-        console.log(`WSS server running on port 8123`);
+      httpsServer.listen(port, () => {
+        console.log(`WSS server running on port ${port}`);
         resolve();
       });
     });
@@ -1079,6 +1090,10 @@ describe('HomeAssistant with ssl', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   afterAll(async () => {
@@ -1130,7 +1145,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should not connect to Home Assistant with ssl', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', 'notajson', reconnectTimeoutTime, reconnectRetries, undefined, false);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, 'notajson', reconnectTimeoutTime, reconnectRetries, undefined, false);
 
     homeAssistant.on('error', () => {
       //
@@ -1149,7 +1164,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should connect to Home Assistant with ssl', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, reconnectTimeoutTime, reconnectRetries, undefined, false);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, reconnectTimeoutTime, reconnectRetries, undefined, false);
 
     homeAssistant.on('error', () => {
       //
@@ -1252,7 +1267,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should connect to Home Assistant with ssl and rejectUnauthorized=false', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, undefined, undefined, undefined, false);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, undefined, undefined, undefined, false);
     await homeAssistant.connect();
     expect(homeAssistant.connected).toBe(true);
     expect(homeAssistant.hassDevices.size).toBe(0);
@@ -1377,7 +1392,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should not connect if wsUrl is wss:// and certificate are not present', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, reconnectTimeoutTime, reconnectRetries, './invalid/cert.pem');
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, reconnectTimeoutTime, reconnectRetries, './invalid/cert.pem');
     homeAssistant.on('error', () => {
       //
     });
@@ -1397,7 +1412,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should close for timeout', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), false);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), false);
     homeAssistant.on('error', () => {
       //
     });
@@ -1435,7 +1450,7 @@ describe('HomeAssistant with ssl', () => {
   });
 
   it('should connect to Home Assistant with ssl and CA certificate', async () => {
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), false);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), false);
     homeAssistant.on('error', () => {
       //
     });
@@ -1468,7 +1483,7 @@ describe('HomeAssistant with ssl', () => {
 
   it('should connect to Home Assistant with ssl and self-signed CA certificate', async () => {
     // jest.restoreAllMocks();
-    homeAssistant = new HomeAssistant('wss://localhost:8123', accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), true);
+    homeAssistant = new HomeAssistant(`wss://localhost:${port}`, accessToken, undefined, undefined, path.join('certificates', 'matterbridge-hass-ca.crt'), true);
 
     await homeAssistant.connect();
 
