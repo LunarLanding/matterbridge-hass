@@ -58,7 +58,7 @@ import {
 } from 'matterbridge/devices';
 import { AnsiLogger, CYAN, db, debugStringify, idn, ign, type LogLevel, rs, TimestampFormat } from 'matterbridge/logger';
 import { type ActionContext, type AtLeastOne, type Behavior, UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
-import { BooleanStateServer, BridgedDeviceBasicInformationServer, PowerSourceServer } from 'matterbridge/matter/behaviors';
+import { BooleanStateServer, BridgedDeviceBasicInformationServer, FixedLabelServer, PowerSourceServer } from 'matterbridge/matter/behaviors';
 import {
   BooleanState,
   BridgedDeviceBasicInformation,
@@ -1187,8 +1187,12 @@ export class MutableDevice {
       // Add the required clusters to the main endpoint
       mainDevice.endpoint.addRequiredClusterServers();
       // Add the Fixed Label cluster to the main endpoint
-      // oxlint-disable-next-line no-empty-function
-      if (this.composedType) void mainDevice.endpoint.addFixedLabel('composed', this.composedType).catch(/* istanbul ignore next */ () => {});
+      const fixedLabels: { label: string; value: string }[] = [];
+      if (this.composedType) fixedLabels.push({ label: 'composed', value: this.composedType.substring(0, 16) });
+      if (mainDevice.friendlyName) fixedLabels.push({ label: 'name', value: mainDevice.friendlyName.substring(0, 16) });
+      if (fixedLabels.length > 0) {
+        mainDevice.endpoint.behaviors.require(FixedLabelServer, { labelList: fixedLabels });
+      }
       // Set the configUrl of the main endpoint
       if (this.configUrl) mainDevice.endpoint.configUrl = this.configUrl;
       // Add the command handlers
@@ -1224,6 +1228,12 @@ export class MutableDevice {
     device.endpoint.addClusterServers(device.clusterServersIds);
     // Add the required clusters to the child endpoint
     device.endpoint.addRequiredClusterServers();
+    // Add the Fixed Label cluster for the name
+    if (device.friendlyName) {
+      device.endpoint.behaviors.require(FixedLabelServer, {
+        labelList: [{ label: 'name', value: device.friendlyName.substring(0, 16) }],
+      });
+    }
     // Add the command handlers
     for (const commandHandler of device.commandHandlers) {
       device.endpoint.addCommandHandler(commandHandler.command, (data) => {
