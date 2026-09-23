@@ -24,7 +24,7 @@
 import { airQualitySensor, electricalSensor, powerSource } from 'matterbridge';
 import { CYAN, db, debugStringify } from 'matterbridge/logger';
 import { AirQuality } from 'matterbridge/matter/clusters';
-import { getClusterNameById } from 'matterbridge/matter/types';
+import { getClusterNameById, Namespace } from 'matterbridge/matter/types';
 import { isValidString } from 'matterbridge/utils';
 
 import { hassDomainSensorsConverter } from './converters.js';
@@ -63,7 +63,11 @@ export function addSensorEntity(
     endpointName = 'AirQuality'; // Remap the endpoint name for the entity
     mutableDevice.addDeviceTypes('AirQuality', airQualitySensor); // Add the air quality sensor device type
     mutableDevice.addClusterServerIds('AirQuality', AirQuality.id); // Add the AirQuality cluster
-    if (isValidString(state.attributes['friendly_name'])) mutableDevice.setFriendlyName('AirQuality', state.attributes['friendly_name']); // Set the friendly name for the air quality sensor
+    if (isValidString(state.attributes['friendly_name'])) {
+      const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
+      mutableDevice.setFriendlyName('AirQuality', label); // Set the friendly name for the air quality sensor
+      mutableDevice.addTagLists('AirQuality', { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
+    }
     return endpointName;
   }
 
@@ -86,7 +90,11 @@ export function addSensorEntity(
       platform.log.debug(`+ sensor device ${CYAN}${hassDomainSensor.deviceType.name}${db} cluster ${CYAN}${getClusterNameById(hassDomainSensor.clusterId)}${db}`);
       mutableDevice.addDeviceTypes(endpointName, hassDomainSensor.deviceType);
       mutableDevice.addClusterServerIds(endpointName, hassDomainSensor.clusterId);
-      if (isValidString(state.attributes['friendly_name'])) mutableDevice.setFriendlyName(endpointName, state.attributes['friendly_name']);
+      if (isValidString(state.attributes['friendly_name'])) {
+        const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
+        mutableDevice.setFriendlyName(endpointName, label);
+        mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
+      }
       platform.log.debug(`- state ${debugStringify(state)}`);
     });
   return endpointName;

@@ -23,6 +23,8 @@
 
 import { mountedOnOffControl, onOffPlugInUnit } from 'matterbridge';
 import { OnOff } from 'matterbridge/matter/clusters';
+import { Namespace } from 'matterbridge/matter/types';
+import { isValidString } from 'matterbridge/utils';
 import { CYAN, db } from 'node-ansi-logger';
 
 import { getDomain } from './helpers.js';
@@ -36,11 +38,11 @@ import type { MutableDevice } from './mutableDevice.js';
  * @param {HomeAssistantPlatform} platform - The Home Assistant platform instance
  * @param {MutableDevice} mutableDevice - The mutable device to which the button will be added
  * @param {HassEntity} entity - The Home Assistant entity to check
- * @param {HassState} _state - The state of the Home Assistant entity
+ * @param {HassState} state - The state of the Home Assistant entity
  *
  * @returns {string | undefined} - The endpoint name for the button, if created; otherwise, undefined
  */
-export function addButtonEntity(platform: HomeAssistantPlatform, mutableDevice: MutableDevice, entity: HassEntity, _state: HassState): string | undefined {
+export function addButtonEntity(platform: HomeAssistantPlatform, mutableDevice: MutableDevice, entity: HassEntity, state: HassState): string | undefined {
   const endpointName = entity.entity_id;
   const domain = getDomain(entity.entity_id);
   if (domain !== 'button') return undefined;
@@ -49,6 +51,11 @@ export function addButtonEntity(platform: HomeAssistantPlatform, mutableDevice: 
 
   // Add to the mutable endpoint the superset mountedOnOffControl and subset onOffPlugInUnit device type for global compatibility with all controllers
   mutableDevice.addDeviceTypes(endpointName, mountedOnOffControl, onOffPlugInUnit);
+  if (isValidString(state.attributes['friendly_name'])) {
+    const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
+    mutableDevice.setFriendlyName(endpointName, label);
+    mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
+  }
   mutableDevice.addCommandHandler(endpointName, 'on', async (data) => {
     await platform.ha.callService(domain, 'press', entity.entity_id);
     // We revert the state after 500ms except for input_boolean that mantain the state

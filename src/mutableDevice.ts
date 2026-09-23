@@ -56,7 +56,7 @@ import {
   MatterbridgeRvcOperationalStateServer,
   MatterbridgeRvcRunModeServer,
 } from 'matterbridge/devices';
-import { AnsiLogger, CYAN, db, debugStringify, idn, ign, type LogLevel, rs, TimestampFormat } from 'matterbridge/logger';
+import { AnsiLogger, CYAN, db, debugStringify, idn, ign, type LogLevel, rs, TimestampFormat, wr } from 'matterbridge/logger';
 import { type ActionContext, type AtLeastOne, type Behavior, UINT16_MAX, UINT32_MAX } from 'matterbridge/matter';
 import { BooleanStateServer, BridgedDeviceBasicInformationServer, FixedLabelServer, PowerSourceServer } from 'matterbridge/matter/behaviors';
 import {
@@ -149,6 +149,7 @@ export class MutableDevice {
   private composedType: string | undefined = undefined;
   private configUrl: string | undefined = undefined;
   private mode: 'server' | undefined = undefined;
+  private nextSemanticTag = 0;
 
   constructor(
     matterbridge: PlatformMatterbridge,
@@ -318,8 +319,29 @@ export class MutableDevice {
    */
   setFriendlyName(endpoint: string, friendlyName: string): this {
     const device = this.initializeEndpoint(endpoint);
-    device.friendlyName = friendlyName;
+    // Child endpoints expose this value through the Matter FixedLabel cluster, which caps each value at
+    // 16 characters. The parent bridged device already carries this.deviceName, so on child endpoints drop
+    // that redundant prefix (when present) to leave room for the part that actually distinguishes this
+    // endpoint from its siblings (e.g. "Tower Both Displays" -> "Both Displays").
+    const prefix = `${this.deviceName} `;
+    device.friendlyName = endpoint !== '' && friendlyName.startsWith(prefix) && friendlyName.length > prefix.length ? friendlyName.slice(prefix.length) : friendlyName;
     return this;
+  }
+
+  /**
+   * Returns the next Matter Common Number namespace semantic tag value (0 = "Zero" .. 30 = "Thirty") to use
+   * when disambiguating sibling child endpoints under this device, advancing the internal counter on each call.
+   *
+   * Without a distinct tag per sibling, controllers cannot rely on the (namespaceId, tag) pair to tell
+   * apart multiple child endpoints of a bridged device, and may fall back to generic or duplicated names
+   * even though each endpoint carries a different semantic tag `label`.
+   *
+   * @returns {number} The next tag value, clamped to the highest value defined by the Common Number namespace.
+   */
+  nextTag(): number {
+    const tag = Math.min(this.nextSemanticTag, 30);
+    this.nextSemanticTag++;
+    return tag;
   }
 
   /**
@@ -1230,6 +1252,12 @@ export class MutableDevice {
     device.endpoint.addRequiredClusterServers();
     // Add the Fixed Label cluster for the name
     if (device.friendlyName) {
+      if (device.friendlyName.length > 16) {
+        this.log.warn(
+          `Endpoint ${CYAN}${endpoint}${wr} friendly name "${CYAN}${device.friendlyName}${wr}" is ${device.friendlyName.length} characters and will be truncated to ` +
+            `"${CYAN}${device.friendlyName.substring(0, 16)}${wr}" by Matter's FixedLabel cluster (16-character limit). Consider shortening the entity name in Home Assistant.`,
+        );
+      }
       device.endpoint.behaviors.require(FixedLabelServer, {
         labelList: [{ label: 'name', value: device.friendlyName.substring(0, 16) }],
       });

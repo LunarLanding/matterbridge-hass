@@ -43,6 +43,8 @@ function createMockMutableDevice(): MutableDevice {
       return this;
     }),
     setFriendlyName: vi.fn(),
+    addTagLists: vi.fn(),
+    nextTag: vi.fn(() => 0),
     get: vi.fn((ep: string) => ({ deviceTypes: ensure(ep).deviceTypes })),
     addClusterServerColorTemperatureColorControl: vi.fn(),
     addClusterServerColorControl: vi.fn(),

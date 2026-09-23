@@ -14,18 +14,27 @@ type CommandHandler = (data: { endpoint: { setAttribute: (...args: unknown[]) =>
 type MutableDeviceLike = {
   addDeviceTypes: (endpoint: string, ...types: unknown[]) => unknown;
   addCommandHandler: (endpoint: string, command: string, handler: CommandHandler) => unknown;
+  setFriendlyName: (endpoint: string, friendlyName: string) => unknown;
+  addTagLists: (endpoint: string, ...tagList: unknown[]) => unknown;
+  nextTag: () => number;
 };
 
 function createMockMutableDevice(): MutableDeviceLike & {
   deviceTypes: Record<string, number[]>;
   commandHandlers: Record<string, Record<string, CommandHandler>>;
+  friendlyNames: Record<string, string>;
+  tagLists: Record<string, unknown[]>;
 } {
   const deviceTypes: Record<string, number[]> = {};
   const commandHandlers: Record<string, Record<string, CommandHandler>> = {};
+  const friendlyNames: Record<string, string> = {};
+  const tagLists: Record<string, unknown[]> = {};
 
   return {
     deviceTypes,
     commandHandlers,
+    friendlyNames,
+    tagLists,
     addDeviceTypes(endpoint: string, ...types: any[]) {
       const ep = endpoint ?? '';
       if (!deviceTypes[ep]) deviceTypes[ep] = [];
@@ -37,6 +46,19 @@ function createMockMutableDevice(): MutableDeviceLike & {
       commandHandlers[ep] ||= {};
       commandHandlers[ep][command] = handler;
       return this;
+    },
+    setFriendlyName(endpoint: string, friendlyName: string) {
+      friendlyNames[endpoint ?? ''] = friendlyName;
+      return this;
+    },
+    addTagLists(endpoint: string, ...tagList: unknown[]) {
+      const ep = endpoint ?? '';
+      tagLists[ep] ||= [];
+      tagLists[ep].push(...tagList);
+      return this;
+    },
+    nextTag() {
+      return 0;
     },
   };
 }
@@ -74,7 +96,7 @@ describe('addButtonEntity', () => {
     const platform = createPlatform();
     const entity = { entity_id: 'button.doorbell', platform: 'demo' } as any;
 
-    const ep = addButtonEntity(platform, md as any, entity, {} as any);
+    const ep = addButtonEntity(platform, md as any, entity, { attributes: {} } as any);
 
     expect(ep).toBe(entity.entity_id);
     expect(md.deviceTypes[entity.entity_id]).toEqual([mountedOnOffControl.code, onOffPlugInUnit.code]);
@@ -110,10 +132,22 @@ describe('addButtonEntity', () => {
     const platform = createPlatform();
     const entity = { entity_id: 'button.scene_trigger', platform: 'demo' } as any;
 
-    const ep = addButtonEntity(platform, md as any, entity, {} as any);
+    const ep = addButtonEntity(platform, md as any, entity, { attributes: {} } as any);
 
     expect(ep).toBe(entity.entity_id);
     expect(md.deviceTypes[entity.entity_id]).toEqual([mountedOnOffControl.code, onOffPlugInUnit.code]);
     expect(md.commandHandlers[entity.entity_id]).toHaveProperty('on');
+  });
+
+  it('sets the friendly name and a semantic tag when friendly_name is present', () => {
+    const md = createMockMutableDevice();
+    const platform = createPlatform();
+    const entity = { entity_id: 'button.living_room_air_filter_identify', platform: 'demo' } as any;
+
+    const ep = addButtonEntity(platform, md as any, entity, { attributes: { friendly_name: 'Living Room Air Filter Identify' } } as any);
+
+    expect(ep).toBe(entity.entity_id);
+    expect(md.friendlyNames[entity.entity_id]).toBe('Living Room Air Filter Identify');
+    expect(md.tagLists[entity.entity_id]).toHaveLength(1);
   });
 });

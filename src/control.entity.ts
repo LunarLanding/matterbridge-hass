@@ -128,7 +128,7 @@ export function addControlEntity(
       if (state.attributes && isValidString(state.attributes['friendly_name'])) {
         const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
         mutableDevice.setFriendlyName(endpointName, label);
-        mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: 0, label });
+        mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
       }
     });
 

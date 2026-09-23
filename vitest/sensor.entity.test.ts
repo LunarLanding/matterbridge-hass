@@ -52,6 +52,12 @@ function createMockMutableDevice(): MutableDevice & {
       friendlyNames[endpoint] = name;
       return this;
     },
+    addTagLists() {
+      return this;
+    },
+    nextTag() {
+      return 0;
+    },
   } as any;
 }
 

@@ -24,7 +24,7 @@
 import { contactSensor, smokeCoAlarm, waterFreezeDetector, waterLeakDetector } from 'matterbridge';
 import { CYAN, db, debugStringify } from 'matterbridge/logger';
 import { BooleanState, SmokeCoAlarm } from 'matterbridge/matter/clusters';
-import { getClusterNameById } from 'matterbridge/matter/types';
+import { getClusterNameById, Namespace } from 'matterbridge/matter/types';
 import { isValidString } from 'matterbridge/utils';
 
 import { hassDomainBinarySensorsConverter } from './converters.js';
@@ -54,7 +54,11 @@ export function addBinarySensorEntity(platform: HomeAssistantPlatform, mutableDe
     platform.log.debug(`+ binary_sensor device ${CYAN}${contactSensor.name}${db} cluster ${CYAN}${getClusterNameById(BooleanState.id)}${db}`);
     mutableDevice.addDeviceTypes(endpointName, contactSensor);
     mutableDevice.addClusterServerIds(endpointName, BooleanState.id);
-    if (isValidString(state.attributes['friendly_name'])) mutableDevice.setFriendlyName(endpointName, state.attributes['friendly_name']);
+    if (isValidString(state.attributes['friendly_name'])) {
+      const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
+      mutableDevice.setFriendlyName(endpointName, label);
+      mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
+    }
     platform.log.debug(`- state ${debugStringify(state)}`);
     platform.log.debug(`= contactSensor device ${CYAN}${entity.entity_id}${db} state ${CYAN}${state.state}${db}`);
     mutableDevice.addClusterServerBooleanState(endpointName, state.state !== 'on');
@@ -77,7 +81,11 @@ export function addBinarySensorEntity(platform: HomeAssistantPlatform, mutableDe
       );
       mutableDevice.addDeviceTypes(endpointName, hassDomainBinarySensor.deviceType);
       mutableDevice.addClusterServerIds(endpointName, hassDomainBinarySensor.clusterId);
-      if (isValidString(state.attributes['friendly_name'])) mutableDevice.setFriendlyName(endpointName, state.attributes['friendly_name']);
+      if (isValidString(state.attributes['friendly_name'])) {
+        const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
+        mutableDevice.setFriendlyName(endpointName, label);
+        mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
+      }
       platform.log.debug(`- state ${debugStringify(state)}`);
 
       // Configure the BooleanState cluster default value for contactSensor.
