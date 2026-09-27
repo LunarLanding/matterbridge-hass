@@ -705,7 +705,6 @@ describe('MutableDevice', () => {
       'scenesManagement',
       'levelControl',
       'colorControl',
-      'fixedLabel',
     ]);
 
     await addDevice(aggregator, device);
@@ -727,7 +726,7 @@ describe('MutableDevice', () => {
     expect(device.deviceTypes.get(bridgedNode.code)).toBeDefined();
     expect(device.deviceTypes.get(powerSource.code)).toBeDefined();
     expect(device.deviceTypes.get(onOffLightSwitch.code)).toBeDefined();
-    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'powerSource', 'onOff', 'identify', 'fixedLabel']);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'powerSource', 'onOff', 'identify']);
 
     await addDevice(aggregator, device);
     mutableDevice.destroy();
@@ -749,7 +748,7 @@ describe('MutableDevice', () => {
     expect(device.deviceTypes.get(bridgedNode.code)).toBeUndefined();
     expect(device.deviceTypes.get(powerSource.code)).toBeDefined();
     expect(device.deviceTypes.get(onOffLightSwitch.code)).toBeDefined();
-    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'powerSource', 'onOff', 'identify', 'fixedLabel']);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'powerSource', 'onOff', 'identify']);
 
     // await addDevice(aggregator, device);
     mutableDevice.destroy();
@@ -778,16 +777,7 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode', 'PowerSource', 'Fan']);
-    expect(device.getAllClusterServerNames()).toEqual([
-      'descriptor',
-      'matterbridge',
-      'bridgedDeviceBasicInformation',
-      'powerSource',
-      'identify',
-      'groups',
-      'fanControl',
-      'fixedLabel',
-    ]);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'powerSource', 'identify', 'groups', 'fanControl']);
     expect(device.getChildEndpoints().length).toBe(0);
 
     expect(await addDevice(aggregator, device)).toBe(true);
@@ -828,14 +818,14 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode', 'PowerSource']);
-    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'powerSource', 'fixedLabel']);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'powerSource']);
     expect(device.getChildEndpoints().length).toBe(1);
 
     // Verify child endpoint exists and retains its clusters
     const childEndpoint = mutableDevice.getEndpoint('fan');
     expect(childEndpoint).toBeDefined();
     expect(Array.from(childEndpoint.deviceTypes.values()).map((d) => d.name)).toEqual(['Fan']);
-    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'fanControl', 'identify', 'groups', 'fixedLabel']);
+    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'fanControl', 'identify', 'groups']);
 
     expect(await aggregator.add(device)).toBe(device);
 
@@ -882,16 +872,7 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode', 'PowerSource', 'Fan']);
-    expect(device.getAllClusterServerNames()).toEqual([
-      'descriptor',
-      'matterbridge',
-      'fanControl',
-      'bridgedDeviceBasicInformation',
-      'identify',
-      'groups',
-      'powerSource',
-      'fixedLabel',
-    ]);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'fanControl', 'bridgedDeviceBasicInformation', 'identify', 'groups', 'powerSource']);
     expect(device.getChildEndpoints().length).toBe(0);
 
     expect(await aggregator.add(device)).toBe(device);
@@ -934,7 +915,7 @@ describe('MutableDevice', () => {
     expect(mutableDevice.get().clusterServersIds).toHaveLength(1);
     expect(mutableDevice.get().clusterServersObjs).toHaveLength(2); // OnOff and BridgedDeviceBasicInformation
 
-    expect(Object.keys(device.behaviors.supported)).toHaveLength(11); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl", "fixedLabel"]
+    expect(Object.keys(device.behaviors.supported)).toHaveLength(10); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl"]
     expect(device.hasClusterServer(BridgedDeviceBasicInformation.id)).toBeTruthy();
     expect(device.hasClusterServer(Descriptor.id)).toBeTruthy();
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
@@ -975,7 +956,7 @@ describe('MutableDevice', () => {
     expect(mutableDevice.get().clusterServersIds).toHaveLength(1);
     expect(mutableDevice.get().clusterServersObjs).toHaveLength(2); // OnOff and BridgedDeviceBasicInformation
 
-    expect(Object.keys(device.behaviors.supported)).toHaveLength(11); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl", "fixedLabel"]
+    expect(Object.keys(device.behaviors.supported)).toHaveLength(10); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl"]
     expect(device.hasClusterServer(BridgedDeviceBasicInformation.id)).toBeTruthy();
     expect(device.hasClusterServer(Descriptor.id)).toBeTruthy();
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
@@ -1014,7 +995,7 @@ describe('MutableDevice', () => {
     expect(mutableDevice.get().clusterServersIds).toHaveLength(1);
     expect(mutableDevice.get().clusterServersObjs).toHaveLength(2); // OnOff and BridgedDeviceBasicInformation
 
-    expect(Object.keys(device.behaviors.supported)).toHaveLength(11); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl", "fixedLabel"]
+    expect(Object.keys(device.behaviors.supported)).toHaveLength(10); // ["descriptor", "matterbridge", "onOff", "bridgedDeviceBasicInformation", "powerSource", "identify", "groups", "scenesManagement", "levelControl", "colorControl"]
     expect(device.hasClusterServer(BridgedDeviceBasicInformation.id)).toBeTruthy();
     expect(device.hasClusterServer(Descriptor.id)).toBeTruthy();
     expect(device.hasClusterServer(PowerSource.id)).toBeTruthy();
@@ -1142,7 +1123,7 @@ describe('MutableDevice', () => {
     expect(mutableDevice.get('child1').clusterServersObjs).toHaveLength(2);
     expect(mutableDevice.get('child1').commandHandlers).toHaveLength(1);
     expect(mutableDevice.get('child1').subscribeHandlers).toHaveLength(1);
-    expect(Object.keys(mutableDevice.getEndpoint('child1').behaviors.supported)).toEqual(['descriptor', 'matterbridge', 'onOff', 'levelControl', 'identify', 'fixedLabel']);
+    expect(Object.keys(mutableDevice.getEndpoint('child1').behaviors.supported)).toEqual(['descriptor', 'matterbridge', 'onOff', 'levelControl', 'identify']);
 
     expect(mutableDevice.get('child2').deviceTypes).toHaveLength(1);
     expect(mutableDevice.get('child2').tagList).toHaveLength(1);
@@ -1150,15 +1131,7 @@ describe('MutableDevice', () => {
     expect(mutableDevice.get('child2').clusterServersObjs).toHaveLength(1);
     expect(mutableDevice.get('child2').commandHandlers).toHaveLength(1);
     expect(mutableDevice.get('child2').subscribeHandlers).toHaveLength(1);
-    expect(Object.keys(mutableDevice.getEndpoint('child2').behaviors.supported)).toEqual([
-      'descriptor',
-      'matterbridge',
-      'onOff',
-      'identify',
-      'groups',
-      'scenesManagement',
-      'fixedLabel',
-    ]);
+    expect(Object.keys(mutableDevice.getEndpoint('child2').behaviors.supported)).toEqual(['descriptor', 'matterbridge', 'onOff', 'identify', 'groups', 'scenesManagement']);
 
     expect(mutableDevice.getEndpoint()).toBeDefined();
     expect(mutableDevice.getEndpoint('child1')).toBeDefined();
@@ -1234,7 +1207,6 @@ describe('MutableDevice', () => {
       'identify',
       'groups',
       'scenesManagement',
-      'fixedLabel',
     ]);
     expect(device.getChildEndpoints().length).toBe(0);
 
@@ -1281,7 +1253,6 @@ describe('MutableDevice', () => {
       'temperatureMeasurement',
       'relativeHumidityMeasurement',
       'pressureMeasurement',
-      'fixedLabel',
     ]);
     expect(device.getChildEndpoints().length).toBe(0);
     // setDebug(false);
@@ -1333,7 +1304,6 @@ describe('MutableDevice', () => {
       'identify',
       'relativeHumidityMeasurement',
       'pressureMeasurement',
-      'fixedLabel',
     ]);
     expect(device.getChildEndpoints().length).toBe(2);
 
@@ -1341,13 +1311,13 @@ describe('MutableDevice', () => {
     const childEndpoint = mutableDevice.getEndpoint('temperature');
     expect(childEndpoint).toBeDefined();
     expect(Array.from(childEndpoint.deviceTypes.values()).map((d) => d.name)).toEqual(['TemperatureSensor']);
-    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'identify', 'temperatureMeasurement', 'fixedLabel']);
+    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'identify', 'temperatureMeasurement']);
 
     // Verify temperature endpoint exists and retains its clusters
     const childEndpoint2 = mutableDevice.getEndpoint('temperature out');
     expect(childEndpoint2).toBeDefined();
     expect(Array.from(childEndpoint2.deviceTypes.values()).map((d) => d.name)).toEqual(['TemperatureSensor']);
-    expect(childEndpoint2.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'identify', 'temperatureMeasurement', 'fixedLabel']);
+    expect(childEndpoint2.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'identify', 'temperatureMeasurement']);
 
     await addDevice(aggregator, device);
     mutableDevice.destroy();
@@ -1380,22 +1350,13 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode', 'OnOffLight']);
-    expect(device.getAllClusterServerNames()).toEqual([
-      'descriptor',
-      'matterbridge',
-      'bridgedDeviceBasicInformation',
-      'identify',
-      'groups',
-      'scenesManagement',
-      'onOff',
-      'fixedLabel',
-    ]);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'identify', 'groups', 'scenesManagement', 'onOff']);
 
     // Verify child endpoint exists and retains its clusters
     const childEndpoint = mutableDevice.getEndpoint('child1');
     expect(childEndpoint).toBeDefined();
     expect(Array.from(childEndpoint.deviceTypes.values()).map((d) => d.name)).toEqual(['OnOffLight']);
-    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'identify', 'groups', 'scenesManagement', 'fixedLabel']);
+    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'identify', 'groups', 'scenesManagement']);
 
     await addDevice(aggregator, device);
     mutableDevice.destroy();
@@ -1423,13 +1384,13 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode']);
-    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'onOff', 'fixedLabel']);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'bridgedDeviceBasicInformation', 'onOff']);
 
     // Verify child endpoint exists and retains its clusters
     const childEndpoint = mutableDevice.getEndpoint('child1');
     expect(childEndpoint).toBeDefined();
     expect(Array.from(childEndpoint.deviceTypes.values()).map((d) => d.name)).toEqual(['PowerSource']);
-    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'powerSource', 'onOff', 'fixedLabel']);
+    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'powerSource', 'onOff']);
 
     await addDevice(aggregator, device);
     mutableDevice.destroy();
@@ -1465,13 +1426,13 @@ describe('MutableDevice', () => {
 
     // Verify main endpoint
     expect(Array.from(device.deviceTypes.values()).map((d) => d.name)).toEqual(['BridgedNode']);
-    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'bridgedDeviceBasicInformation', 'fixedLabel']);
+    expect(device.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'bridgedDeviceBasicInformation']);
 
     // Verify child endpoint exists and retains its clusters
     const childEndpoint = mutableDevice.getEndpoint('child1');
     expect(childEndpoint).toBeDefined();
     expect(Array.from(childEndpoint.deviceTypes.values()).map((d) => d.name)).toEqual(['PowerSource']);
-    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'powerSource', 'fixedLabel']);
+    expect(childEndpoint.getAllClusterServerNames()).toEqual(['descriptor', 'matterbridge', 'onOff', 'powerSource']);
 
     await addDevice(aggregator, device);
     mutableDevice.destroy();

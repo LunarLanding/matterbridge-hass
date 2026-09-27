@@ -28,7 +28,7 @@ import { colorTemperatureLight, dimmableLight, extendedColorLight, type Matterbr
 import { CYAN, db, debugStringify } from 'matterbridge/logger';
 import type { ActionContext } from 'matterbridge/matter';
 import { LevelControl } from 'matterbridge/matter/clusters';
-import { type ClusterId, getClusterNameById, Namespace } from 'matterbridge/matter/types';
+import { type ClusterId, getClusterNameById } from 'matterbridge/matter/types';
 import { isValidArray, isValidBoolean, isValidNumber, isValidString } from 'matterbridge/utils';
 
 import {
@@ -125,11 +125,7 @@ export function addControlEntity(
       platform.log.debug(`+ ${domain} device ${CYAN}${hassDomain.deviceType.name}${db} cluster ${CYAN}${getClusterNameById(hassDomain.clusterId)}${db}`);
       mutableDevice.addDeviceTypes(endpointName, hassDomain.deviceType);
       mutableDevice.addClusterServerIds(endpointName, hassDomain.clusterId);
-      if (state.attributes && isValidString(state.attributes['friendly_name'])) {
-        const label = (state.attributes['friendly_name'] as string).trim().slice(0, 64);
-        mutableDevice.setFriendlyName(endpointName, label);
-        mutableDevice.addTagLists(endpointName, { mfgCode: null, namespaceId: Namespace.CommonNumber, tag: mutableDevice.nextTag(), label });
-      }
+      if (state.attributes && isValidString(state.attributes['friendly_name'])) mutableDevice.setFriendlyName(endpointName, state.attributes['friendly_name']);
     });
 
   // Skip the entity if no supported domains are found.

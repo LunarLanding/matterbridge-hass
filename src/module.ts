@@ -40,8 +40,8 @@ import {
 } from 'matterbridge';
 import { type AnsiLogger, CYAN, db, debugStringify, dn, er, hk, idn, ign, type LogLevel, nf, or, rs, wr, YELLOW } from 'matterbridge/logger';
 import type { ActionContext } from 'matterbridge/matter';
-import { BridgedDeviceBasicInformation, ColorControl, Descriptor, FixedLabel, LevelControl, ModeSelect, OnOff, PowerSource } from 'matterbridge/matter/clusters';
-import { type ClusterId, getClusterNameById, type Semtag } from 'matterbridge/matter/types';
+import { BridgedDeviceBasicInformation, ColorControl, LevelControl, ModeSelect, OnOff, PowerSource } from 'matterbridge/matter/clusters';
+import { type ClusterId, getClusterNameById } from 'matterbridge/matter/types';
 import { deepEqual, fireAndForget, getErrorMessage, inspectError, isValidArray, isValidBoolean, isValidNumber, isValidObject, isValidString, waiter } from 'matterbridge/utils';
 
 import { addBinarySensorEntity } from './binary_sensor.entity.js';
@@ -73,6 +73,7 @@ import {
   type HassState,
   HomeAssistant,
   type HomeAssistantPrimitive,
+  ColorMode,
 } from './homeAssistant.js';
 import { MutableDevice } from './mutableDevice.js';
 import { savePayload } from './payload.js';
@@ -1047,9 +1048,9 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
     const colorMode = state?.attributes?.['color_mode'];
     const currentColorTempKelvin = state?.attributes?.['color_temp_kelvin'];
-    const targetColorTempKelvin = serviceAttributes['color_temp_kelvin'] as number;
+    const targetColorTempKelvin = serviceAttributes['color_temp_kelvin'];
     const isLongAdaptiveTransition = transition >= 600;
-    const switchingFromColorMode = isValidString(colorMode, 1) && colorMode !== 'color_temp';
+    const switchingFromColorMode = isValidString(colorMode, 1) && colorMode !== ColorMode.COLOR_TEMP;
     const farFromAdaptiveTarget = isValidNumber(currentColorTempKelvin, 1) && Math.abs(currentColorTempKelvin - targetColorTempKelvin) >= 500;
     const isFirstAdaptiveAfterManual = !this.adaptiveLightingEntities.has(entityId);
 
@@ -1228,7 +1229,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
             ? Math.round(data.request.transitionTime / 10)
             : undefined;
       if (transition !== undefined) {
-        if (serviceAttributes === undefined) serviceAttributes = {};
+        serviceAttributes ??= {};
         serviceAttributes['transition'] = transition;
       }
       await this.ha.callService(hassCommand.domain, hassCommand.service, entityId, serviceAttributes);
@@ -1370,24 +1371,6 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       `${db}Received update event from Home Assistant device ${idn}${matterbridgeDevice?.deviceName}${rs}${db} entity ${CYAN}${entityId}${db} ` +
         `from ${YELLOW}${old_state.state}${db} with ${debugStringify(old_state.attributes)}${db} to ${YELLOW}${new_state.state}${db} with ${debugStringify(new_state.attributes)}`,
     );
-    // Propagate friendly_name changes from HA to Matter labels
-    const oldFriendlyName = old_state.attributes?.['friendly_name'];
-    const newFriendlyName = new_state.attributes?.['friendly_name'];
-    if (isValidString(newFriendlyName, 1) && newFriendlyName !== oldFriendlyName) {
-      const label = (newFriendlyName as string).trim().slice(0, 64);
-      endpoint.log.info(`${db}Propagating friendly_name change to Matter labels for entity ${CYAN}${entityId}${db}: "${label}"`);
-      const existingLabels = endpoint.getAttribute(FixedLabel.id, 'labelList', endpoint.log) as { label: string; value: string }[] | undefined;
-      if (existingLabels) {
-        const updatedLabels = existingLabels.map((e) => (e.label === 'name' ? { label: 'name', value: label } : e));
-        if (!updatedLabels.some((e) => e.label === 'name')) updatedLabels.push({ label: 'name', value: label });
-        await endpoint.setAttribute(FixedLabel.id, 'labelList', updatedLabels, endpoint.log);
-      }
-      const existingTags = endpoint.getAttribute(Descriptor.id, 'tagList', endpoint.log) as Semtag[] | undefined;
-      if (existingTags?.length) {
-        const updatedTags = existingTags.map((t) => ({ ...t, label }));
-        await endpoint.setAttribute(Descriptor.id, 'tagList', updatedTags, endpoint.log);
-      }
-    }
     const domain = entityId.split('.')[0];
     if (['automation', 'scene', 'script', 'input_button', 'button'].includes(domain)) {
       // No update for individual entities (automation, scene, script) only for input_boolean that maintains the state
