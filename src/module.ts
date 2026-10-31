@@ -25,6 +25,7 @@
 /* oxlint-disable max-lines */
 /* oxlint-disable complexity */
 
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -107,7 +108,12 @@ export interface HomeAssistantPlatformConfig extends PlatformConfig {
   enableServerRvc: boolean;
   discardHiddenEntities: boolean;
   virtualControlLabel: string;
+  /** Command run (via /bin/sh) after controller session changes, e.g. to restore HomeKit labels the hub drops when it re-interviews the bridge */
+  sessionChangeCommand: string;
 }
+
+/** Delays after the last session change at which sessionChangeCommand runs: the hub rebuilds its accessories a little after (re)pairing */
+const SESSION_CHANGE_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000];
 
 /**
  * This is the standard interface for Matterbridge plugins.
@@ -151,6 +157,10 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
 
   /** Light entities tracked for adaptive lighting transitions. Set by entity.entity_id */
   readonly adaptiveLightingEntities = new Set<EntityId>();
+
+  /** Pending sessionChangeCommand runs, rescheduled on every session change */
+  private sessionChangeTimers: NodeJS.Timeout[] = [];
+  private sessionChangeRunning = false;
 
   /** Endpoint names remapping for entities. Key is entity.entity_id. Value is the endpoint name ('' for the main endpoint) */
   readonly endpointNames = new Map<EntityId, string>();
@@ -246,6 +256,7 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
       this.config.enableServerRvc = isValidBoolean(this.config.enableServerRvc) ? this.config.enableServerRvc : true;
       this.config.discardHiddenEntities = isValidBoolean(this.config.discardHiddenEntities) ? this.config.discardHiddenEntities : false;
       this.config.virtualControlLabel = isValidString(this.config.virtualControlLabel, 1) ? this.config.virtualControlLabel : '';
+      this.config.sessionChangeCommand = isValidString(this.config.sessionChangeCommand, 1) ? this.config.sessionChangeCommand : '';
       this.config.debug ??= false;
       this.config.unregisterOnShutdown ??= false;
     }
@@ -991,6 +1002,44 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.failedDevices) this.wssSendSnackbarMessage(`Home Assistant: ${this.failedDevices} devices failed to be created`, 60, 'error');
     if (this.failedEntities) this.log.error(`Failed entity creation: ${this.failedEntities}`);
     if (this.failedEntities) this.wssSendSnackbarMessage(`Home Assistant: ${this.failedEntities} entities failed to be created`, 60, 'error');
+
+    this.subscribeSessionChanges();
+  }
+
+  /**
+   * Runs config.sessionChangeCommand after controller sessions open or change their subscriptions.
+   * Matterbridge doesn't hand plugins its server node, so it is reached as the root owner of one of our endpoints.
+   */
+  private subscribeSessionChanges(): void {
+    if (!this.config.sessionChangeCommand) return;
+    let node: any = this.matterbridgeDevices.values().next().value;
+    while (node?.owner) node = node.owner;
+    const sessions = node?.events?.sessions;
+    if (!sessions?.opened || !sessions?.subscriptionsChanged) {
+      this.log.warn('Session change command: server node sessions not reachable, not watching for controller session changes');
+      return;
+    }
+    sessions.opened.on(() => this.scheduleSessionChangeCommand('session opened'));
+    sessions.subscriptionsChanged.on(() => this.scheduleSessionChangeCommand('subscriptions changed'));
+    this.log.info(`Session change command: watching controller sessions to run ${CYAN}${this.config.sessionChangeCommand}${nf}`);
+    // Plugins are configured after the server node is online, so the controllers' reconnect on startup was already missed
+    this.scheduleSessionChangeCommand('startup');
+  }
+
+  private scheduleSessionChangeCommand(reason: string): void {
+    this.log.debug(`Session change command: ${reason}, scheduling runs in ${SESSION_CHANGE_DELAYS_MS.map((ms) => ms / 1000).join(', ')} s`);
+    for (const timer of this.sessionChangeTimers) clearTimeout(timer);
+    this.sessionChangeTimers = SESSION_CHANGE_DELAYS_MS.map((ms) => setTimeout(() => this.runSessionChangeCommand(), ms));
+  }
+
+  private runSessionChangeCommand(): void {
+    if (this.sessionChangeRunning) return;
+    this.sessionChangeRunning = true;
+    execFile('/bin/sh', ['-c', this.config.sessionChangeCommand], { timeout: 5 * 60_000 }, (error, stdout, stderr) => {
+      this.sessionChangeRunning = false;
+      for (const line of `${stdout}${stderr}`.split('\n').filter((l) => l.trim())) this.log.info(`Session change command: ${line}`);
+      if (error) this.log.error(`Session change command failed: ${getErrorMessage(error)}`);
+    });
   }
 
   // oxlint-disable-next-line typescript/require-await
@@ -1008,6 +1057,8 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
   }
 
   override async onShutdown(reason?: string): Promise<void> {
+    for (const timer of this.sessionChangeTimers) clearTimeout(timer);
+    this.sessionChangeTimers = [];
     // Save the state cache to restore it at the next startup.
     /* v8 ignore next cause if the platform is ready then the context is defined */
     if (this.context) await this.stateCache.save(this.context);

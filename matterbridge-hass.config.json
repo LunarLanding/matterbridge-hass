@@ -25,6 +25,7 @@
   "enableServerRvc": true,
   "discardHiddenEntities": true,
   "virtualControlLabel": "",
+  "sessionChangeCommand": "",
   "debug": false,
   "unregisterOnShutdown": false
 }
