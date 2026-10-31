@@ -41,6 +41,7 @@ import {
 } from 'matterbridge';
 import { type AnsiLogger, CYAN, db, debugStringify, dn, er, hk, idn, ign, type LogLevel, nf, or, rs, wr, YELLOW } from 'matterbridge/logger';
 import type { ActionContext } from 'matterbridge/matter';
+import { BasicInformationServer } from 'matterbridge/matter/behaviors';
 import { BridgedDeviceBasicInformation, ColorControl, LevelControl, ModeSelect, OnOff, PowerSource } from 'matterbridge/matter/clusters';
 import { type ClusterId, getClusterNameById } from 'matterbridge/matter/types';
 import { deepEqual, fireAndForget, getErrorMessage, inspectError, isValidArray, isValidBoolean, isValidNumber, isValidObject, isValidString, waiter } from 'matterbridge/utils';
@@ -1003,22 +1004,52 @@ export class HomeAssistantPlatform extends MatterbridgeDynamicPlatform {
     if (this.failedEntities) this.log.error(`Failed entity creation: ${this.failedEntities}`);
     if (this.failedEntities) this.wssSendSnackbarMessage(`Home Assistant: ${this.failedEntities} entities failed to be created`, 60, 'error');
 
-    this.subscribeSessionChanges();
+    await this.watchServerNode();
+  }
+
+  /**
+   * Hooks into the server node, which Matterbridge doesn't hand to plugins: it is reached as the root owner of one of our endpoints.
+   */
+  private async watchServerNode(): Promise<void> {
+    let node: any = this.matterbridgeDevices.values().next().value;
+    while (node?.owner) node = node.owner;
+    if (!node?.events?.sessions) {
+      this.log.warn('Server node not reachable from the platform endpoints: not watching controller sessions or the endpoint layout');
+      return;
+    }
+    await this.bumpConfigurationVersionOnLayoutChange(node);
+    this.subscribeSessionChanges(node);
+  }
+
+  /**
+   * Matterbridge never increases BasicInformation.ConfigurationVersion, so controllers (Apple Home) don't re-read the structure of an
+   * existing bridged device when its child endpoints change (e.g. a switch added to the Tower). Bump it when the endpoint layout differs
+   * from the one of the previous run.
+   */
+  private async bumpConfigurationVersionOnLayoutChange(node: any): Promise<void> {
+    if (!this.context) return;
+    const layout = Array.from(new Set(this.matterbridgeDevices.values()))
+      .map((device) => `${device.id}#${device.maybeNumber}[${device.getChildEndpoints().map((child) => `${child.id}#${child.maybeNumber}`).sort().join(',')}]`)
+      .sort()
+      .join(';');
+    const previous = await this.context.get<string>('endpointLayout', '');
+    if (layout === previous) return;
+    try {
+      const configurationVersion = (node.stateOf(BasicInformationServer).configurationVersion ?? 1) + 1;
+      await node.setStateOf(BasicInformationServer, { configurationVersion });
+      await this.context.set('endpointLayout', layout);
+      this.log.notice(`Endpoint layout changed: increased BasicInformation.ConfigurationVersion to ${configurationVersion} so controllers re-read the bridge structure`);
+    } catch (error) {
+      this.log.error(`Error increasing BasicInformation.ConfigurationVersion: ${getErrorMessage(error)}`);
+    }
   }
 
   /**
    * Runs config.sessionChangeCommand after controller sessions open or change their subscriptions.
-   * Matterbridge doesn't hand plugins its server node, so it is reached as the root owner of one of our endpoints.
    */
-  private subscribeSessionChanges(): void {
+  private subscribeSessionChanges(node: any): void {
     if (!this.config.sessionChangeCommand) return;
-    let node: any = this.matterbridgeDevices.values().next().value;
-    while (node?.owner) node = node.owner;
-    const sessions = node?.events?.sessions;
-    if (!sessions?.opened || !sessions?.subscriptionsChanged) {
-      this.log.warn('Session change command: server node sessions not reachable, not watching for controller session changes');
-      return;
-    }
+    const sessions = node.events.sessions;
     sessions.opened.on(() => this.scheduleSessionChangeCommand('session opened'));
     sessions.subscriptionsChanged.on(() => this.scheduleSessionChangeCommand('subscriptions changed'));
     this.log.info(`Session change command: watching controller sessions to run ${CYAN}${this.config.sessionChangeCommand}${nf}`);
